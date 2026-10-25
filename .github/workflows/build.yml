@@ -67,6 +67,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
+          # Mirror make_release_win.bat: runtime DLLs (OpenSSL, sqlite, lua...) and data dirs
+          # must sit next to fmd.exe, otherwise HTTPS fails with "Cannot get manga info".
+          Copy-Item dist/x86_64-win64/* out/ -Recurse
+          Remove-Item out/lua51.dll, out/lua53.dll -ErrorAction SilentlyContinue
+          Copy-Item dist/config.json, changelog.txt, readme.rtf out/
+          Copy-Item images, licenses, lua -Destination out/ -Recurse
+          New-Item -ItemType Directory -Force out/languages | Out-Null
+          Copy-Item languages/*.po out/languages/
           Copy-Item bin/x86_64-win64/fmd.exe out/
           if (Test-Path bin/x86_64-win64/fmd.dbg) { Copy-Item bin/x86_64-win64/fmd.dbg out/ }
           Compress-Archive -Path out/* -DestinationPath fmd-win64.zip -Force
