@@ -1,0 +1,82 @@
+name: Build FMD2 (Win64)
+
+on:
+  push:
+    branches: [master, 'fix/**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lazarus + OPM packages
+        uses: gcarreno/setup-lazarus@v3
+        with:
+          lazarus-version: stable
+          include-packages: 'RichMemo, MultiLog, VirtualTreeViewV5'
+
+      # Packages from the README that are not in OPM. Cloned outside the workspace.
+      - name: Install GitHub-hosted packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deps = Join-Path $env:RUNNER_TEMP 'deps'
+          New-Item -ItemType Directory -Force $deps | Out-Null
+          Set-Location $deps
+          git clone --depth 1 https://github.com/NDXDeveloper/dcpcrypt-lazarus.git
+          git clone --depth 1 https://github.com/benibela/internettools.git
+          git clone --depth 1 https://github.com/zamtmn/metadarkstyle.git
+          git clone --depth 1 https://github.com/NhKPaNdA/Lazarus_CustomControls.git
+          git clone --depth 1 https://github.com/BeRo1985/flre.git
+          git clone --depth 1 https://github.com/BeRo1985/pucu.git
+
+          # internettools default regex engine (see README)
+          Copy-Item flre/src/FLRE.pas internettools/data/
+          Copy-Item pucu/src/PUCU.pas, pucu/src/PUCUCode.pas internettools/data/
+
+          $lpk = @(
+            'dcpcrypt-lazarus/src/dcpcrypt.lpk',
+            'internettools/internettools.lpk',
+            'metadarkstyle/metadarkstyle.lpk',
+            'metadarkstyle/metadarkstyledsgn.lpk',
+            'Lazarus_CustomControls/Core/customcontrols.lpk',
+            'Lazarus_CustomControls/Addon/MultiLog/customcontrols_addon_multilog.lpk'
+          )
+          foreach ($p in $lpk) {
+            $full = (Resolve-Path $p).Path
+            Write-Host "== $full"
+            lazbuild --add-package-link $full
+          }
+
+      - name: Build fmd.exe
+        shell: pwsh
+        run: |
+          lazbuild -B --build-mode=Win64 --no-write-project mangadownloader/md.lpi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item bin/x86_64-win64/fmd.exe | Format-List FullName, Length
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item bin/x86_64-win64/fmd.exe out/
+          if (Test-Path bin/x86_64-win64/fmd.dbg) { Copy-Item bin/x86_64-win64/fmd.dbg out/ }
+          Compress-Archive -Path out/* -DestinationPath fmd-win64.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fmd-win64
+          path: fmd-win64.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" fmd-win64.zip --title "${{ github.ref_name }}" --generate-notes
