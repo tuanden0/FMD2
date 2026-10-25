@@ -47,6 +47,28 @@ implementation
 uses
   frmMain;
 
+// Zipper only auto-prefixes in its TFileStream (> MAX_PATH); its FindFirst and the ".tmp" file
+// next to the archive don't, and "Enable long name paths" may be off. So prefix here.
+function ToLongPath(const S: String): String;
+begin
+  Result := S;
+  {$IFDEF WINDOWS}
+  if (Length(S) < MAX_PATHDIR) or (Pos('\\?\', S) = 1) then
+  begin
+    Exit;
+  end;
+
+  if Pos('\\', S) = 1 then
+  begin
+    Result := '\\?\UNC\' + Copy(S, 3, MaxInt);
+  end
+  else if (Length(S) > 2) and (S[2] = ':') and (S[3] = '\') then
+  begin
+    Result := '\\?\' + S;
+  end;
+  {$ENDIF}
+end;
+
 procedure TPacker.FileFound(FileIterator: TFileIterator);
 begin
   FFileList.Add(FileIterator.Filename);
@@ -276,6 +298,12 @@ begin
       end;
   end;
 
+  Path := ToLongPath(Path);
+  for i := 0 to FFileList.Count - 1 do
+  begin
+    FFileList[i] := ToLongPath(FFileList[i]);
+  end;
+
   FFileList.CustomSort(NaturalCustomSort);
   case Format of
     pfZIP: FExt := '.zip';
@@ -292,6 +320,7 @@ begin
   begin
     FSavedFileName := TrimAndExpandFilename(Path) + FExt;
   end;
+  FSavedFileName := ToLongPath(FSavedFileName);
 
   if FFileList.Count = 0 then
   begin
