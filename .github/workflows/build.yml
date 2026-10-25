@@ -35,12 +35,14 @@ jobs:
           git clone --depth 1 https://github.com/NhKPaNdA/Lazarus_CustomControls.git
           git clone --depth 1 https://github.com/BeRo1985/flre.git
           git clone --depth 1 https://github.com/BeRo1985/pucu.git
+          git clone --depth 1 https://github.com/geby/synapse.git
 
           # internettools default regex engine (see README)
           Copy-Item flre/src/FLRE.pas internettools/data/
           Copy-Item pucu/src/PUCU.pas, pucu/src/PUCUCode.pas internettools/data/
 
           $lpk = @(
+            'synapse/laz_synapse.lpk',
             'dcpcrypt-lazarus/src/dcpcrypt.lpk',
             'internettools/internettools.lpk',
             'metadarkstyle/metadarkstyle.lpk',
