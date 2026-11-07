@@ -379,6 +379,10 @@ begin
               OptionChangeUnicodeCharacterStr);
         end;
         d.downloadInfo.SaveTo := FSaveTo;
+        for i := 0 to d.ChapterNames.Count - 1 do
+        begin
+          d.ChapterNames[i] := FitChapterName(FSaveTo, d.ChapterNames[i]);
+        end;
         d.DBInsert;
       finally
         DLManager.UnLock;

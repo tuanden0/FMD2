@@ -346,9 +346,9 @@ begin
     pfEPUB: FExt := '.epub';
   end;
 
-  // ponytail: "<name><ext>" over NTFS's 255-char name limit fails here (images kept, task failed).
-  // Cutting only here collides two chapters onto one archive and misses lookups by name in
-  // uFavoritesManager/frmMain; a fix must cut and dedupe the chapter name where it is built.
+  // New tasks get names cut by FitChapterName where the task is built; don't cut here, or lookups
+  // by name in uFavoritesManager/frmMain miss the archive. Tasks saved before that keep long names,
+  // and "<name><ext>" over NTFS's 255-char limit fails here safely (images kept, task failed).
   if FileName <> '' then
   begin
     FSavedFileName := FileName + FExt;

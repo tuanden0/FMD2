@@ -480,7 +480,7 @@ begin
 
           for i := 0 to NewMangaInfo.ChapterLinks.Count - 1 do
           begin
-            chapterName := CustomRename(
+            chapterName := FitChapterName(FavoriteInfo.SaveTo, CustomRename(
               OptionChapterCustomRename,
               FavoriteInfo.Website,
               FavoriteInfo.Title,
@@ -489,7 +489,7 @@ begin
               NewMangaInfo.ChapterNames[i],
               Format('%.4d', [i + 1]),
               OptionChangeUnicodeCharacter,
-              OptionChangeUnicodeCharacterStr);
+              OptionChangeUnicodeCharacterStr));
             chapterPath := savePath + chapterName;
 
             case detectedFormat of
@@ -1104,7 +1104,7 @@ begin
                   for j := 0 to NewMangaInfoChaptersPos.Count - 1 do
                   begin
                     ChapterLinks.Add(NewMangaInfo.ChapterLinks[NewMangaInfoChaptersPos[j]]);
-                    ChapterNames.Add(CustomRename(
+                    ChapterNames.Add(FitChapterName(FavoriteInfo.SaveTo, CustomRename(
                       OptionChapterCustomRename,
                       FavoriteInfo.Website,
                       FavoriteInfo.Title,
@@ -1113,7 +1113,7 @@ begin
                       NewMangaInfo.ChapterNames[NewMangaInfoChaptersPos[j]],
                       Format('%.4d', [NewMangaInfoChaptersPos[j] + 1]),
                       OptionChangeUnicodeCharacter,
-                      OptionChangeUnicodeCharacterStr));
+                      OptionChangeUnicodeCharacterStr)));
                   end;
 
                   if LNCResult = ncrDownload then

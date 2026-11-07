@@ -2709,6 +2709,10 @@ begin
       end;
 
       s := ReplaceRegExpr('\.*$', s, '', False);
+      for i := 0 to names.Count - 1 do
+      begin
+        names[i] := FitChapterName(s, names[i]);
+      end;
       c := 1;
       p := links.Count;
       r := 0;

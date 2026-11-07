@@ -565,6 +565,8 @@ function CustomRename(const AString, AWebsite, AMangaName, AAuthor, AArtist, ACh
   const AReplaceUnicode: Boolean;
   const AReplaceUnicodeStr: String;
   const AFileName: String = ''): String;
+// cut the middle of a chapter name to "..." so SaveTo + name + ext stays around 200 chars
+function FitChapterName(const ASaveTo, AName: String): String;
 
 // Get substring from source
 function GetString(const Source, sStart, sEnd: String): String;
@@ -1856,6 +1858,57 @@ begin
 
   // remove pathdelim
   Result := TrimChar(Result, AllowDirectorySeparators);
+end;
+
+// Every place that builds or looks up "SaveTo + chapter name" must call this with the same SaveTo,
+// or a cut name won't be found (favorites check, packer, delete-with-files).
+// ponytail: the cut depends on SaveTo's length, so "Change save folder" (which moves files and
+// keeps their names) makes the favorites check miss cut chapters and download them again; the
+// user chose this over a fixed name length. Upgrade: rename moved files with the new cut.
+// SaveTo "G:\Doujinshi\input\" (19), 250-char name -> budget 176 = 116 head + "..." + 57 tail:
+//   "Impact Niyaniya ~Professor Niyaniya's hypnotic role reversal leads to instant defeat! Super
+//    Soft Shupogaki Hikari is...nt brat Ein is super strong but naive about pure love!!!~"
+function FitChapterName(const ASaveTo, AName: String): String;
+const
+  MAX_CHAPTER_PATH = 200; // stays well under MAX_PATH (260), so Explorer can still rename it
+  EXT_RESERVE = 5;        // Length('.epub'), the longest packed ext, so every format gets one name
+  // ponytail: a SaveTo near 200 chars still keeps a 40-char name, so that path can pass 200;
+  // cut SaveTo's manga folder too if that ever matters.
+  MIN_NAME = 40;
+  ELLIPSIS = '...';
+var
+  Name: UnicodeString;
+  Budget, Keep, HeadLen, TailLen, TailStart: Integer;
+begin
+  Result := AName;
+  // NTFS and MAX_PATH count UTF-16 chars, not UTF-8 bytes.
+  Name := UTF8Decode(AName);
+  Budget := MAX_CHAPTER_PATH - Length(UTF8Decode(CorrectPathSys(ASaveTo))) - EXT_RESERVE;
+  if Budget < MIN_NAME then
+  begin
+    Budget := MIN_NAME;
+  end;
+  if Length(Name) <= Budget then
+  begin
+    Exit;
+  end;
+
+  // Keep 2/3 head, 1/3 tail: the tail usually holds what tells chapters apart (number, part).
+  Keep := Budget - Length(ELLIPSIS);
+  TailLen := Keep div 3;
+  HeadLen := Keep - TailLen;
+  // Don't split a surrogate pair at either cut.
+  if (Name[HeadLen] >= #$D800) and (Name[HeadLen] <= #$DBFF) then
+  begin
+    Dec(HeadLen);
+  end;
+  TailStart := Length(Name) - TailLen + 1;
+  if (Name[TailStart] >= #$DC00) and (Name[TailStart] <= #$DFFF) then
+  begin
+    Inc(TailStart);
+    Dec(TailLen);
+  end;
+  Result := UTF8Encode(Copy(Name, 1, HeadLen) + ELLIPSIS + Copy(Name, TailStart, TailLen));
 end;
 
 function GetString(const Source, sStart, sEnd: String): String;
