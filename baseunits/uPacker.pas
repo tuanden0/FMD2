@@ -26,8 +26,9 @@ type
     procedure FileFound(FileIterator: TFileIterator);
     function DoZipCbz: Boolean;
     function Do7Zip: Boolean;
-    procedure DoPdf;
-    procedure DoEpub;
+    function DoPdf: Boolean;
+    function DoEpub: Boolean;
+    procedure DeletePartialFile;
   public
     Path,
     FileName: String;
@@ -47,8 +48,8 @@ implementation
 uses
   frmMain;
 
-// Zipper only auto-prefixes in its TFileStream (> MAX_PATH); its FindFirst and the ".tmp" file
-// next to the archive don't, and "Enable long name paths" may be off. So prefix here.
+// Zipper only auto-prefixes in its TFileStream (> MAX_PATH); its FindFirst doesn't, and
+// "Enable long name paths" may be off. So prefix here.
 function ToLongPath(const S: String): String;
 begin
   Result := S;
@@ -74,6 +75,16 @@ begin
   FFileList.Add(FileIterator.Filename);
 end;
 
+// A failed pack can leave a truncated archive; Execute treats an existing file as success and
+// deletes the source images, so it must not survive.
+procedure TPacker.DeletePartialFile;
+begin
+  if FileExists(FSavedFileName) and not DeleteFile(FSavedFileName) then
+  begin
+    Logger.SendError(Self.ClassName + '.DeletePartialFile Error: failed to delete ' + FSavedFileName);
+  end;
+end;
+
 function TPacker.DoZipCbz: Boolean;
 var
   i: Integer;
@@ -85,6 +96,10 @@ begin
     try
       try
         FileName := FSavedFileName;
+        // Entries above InMemSize (default 256 KB) go through "<archive name>00000.tmp", which
+        // overflows NTFS's 255-char name limit for long titles (\\?\ doesn't lift it). Stored
+        // entries (clnone) cost one image of memory each, so keep them all in memory.
+        InMemSize := High(Int64);
         for i := 0 to FFileList.Count - 1 do
         begin
           with Entries.AddFileEntry(FFileList[i]) do
@@ -95,6 +110,7 @@ begin
         end;
 
         ZipAllFiles;
+        Result := True;
       except
         on E: Exception do
         begin
@@ -107,7 +123,11 @@ begin
     end;
   end;
 
-  Result := FileExists(FSavedFileName);
+  // After Free, so the zipper's output stream is closed and the file can be deleted.
+  if not Result then
+  begin
+    DeletePartialFile;
+  end;
 end;
 
 Function MaybeQuoteIfNotQuoted(Const S : TProcessString) : TProcessString;
@@ -198,12 +218,13 @@ begin
   end;
 end;
 
-procedure TPacker.DoPdf;
+function TPacker.DoPdf: Boolean;
 var
   pdf: TImg2Pdf;
   i: Cardinal;
   fstream: TFileStream;
 begin
+  Result := False;
   try
     pdf := TImg2Pdf.Create;
     try
@@ -225,6 +246,7 @@ begin
       finally
         fstream.Free;
       end;
+      Result := True;
     finally
       pdf.Free;
     end;
@@ -235,14 +257,20 @@ begin
       SimpleException.ExceptionHandleSaveLogOnly(Self, E);
     end;
   end;
+
+  if not Result then
+  begin
+    DeletePartialFile;
+  end;
 end;
 
-procedure TPacker.DoEpub;
+function TPacker.DoEpub: Boolean;
 var
   epub: TEpubBuilder;
   i: Integer;
   fstream: TFileStream;
 begin
+  Result := False;
   try
     epub := TEpubBuilder.Create;
     try
@@ -262,6 +290,7 @@ begin
       finally
         fstream.Free;
       end;
+      Result := True;
     finally
       epub.Free;
     end;
@@ -271,6 +300,11 @@ begin
       E.Message := 'DoEpub.Exception'#13#10 + E.Message;
       SimpleException.ExceptionHandleSaveLogOnly(Self, E);
     end;
+  end;
+
+  if not Result then
+  begin
+    DeletePartialFile;
   end;
 end;
 
@@ -312,6 +346,9 @@ begin
     pfEPUB: FExt := '.epub';
   end;
 
+  // ponytail: "<name><ext>" over NTFS's 255-char name limit fails here (images kept, task failed).
+  // Cutting only here collides two chapters onto one archive and misses lookups by name in
+  // uFavoritesManager/frmMain; a fix must cut and dedupe the chapter name where it is built.
   if FileName <> '' then
   begin
     FSavedFileName := FileName + FExt;
@@ -343,8 +380,8 @@ begin
   packResult:=True;
   case Format of
     pfZIP, pfCBZ: packResult:=DoZipCbz;
-    pfPDF: DoPdf;
-    pfEPUB: DoEpub;
+    pfPDF: packResult:=DoPdf;
+    pfEPUB: packResult:=DoEpub;
   end;
 
   if not packResult then
